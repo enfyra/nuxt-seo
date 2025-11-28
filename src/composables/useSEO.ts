@@ -137,8 +137,8 @@ export const useSEO = (config: SEOConfig) => {
     : undefined
 
   return {
-    meta: safeMeta,
-    structuredData: safeStructuredData,
+    meta: safeMeta as Record<string, any>,
+    structuredData: safeStructuredData as Record<string, any> | undefined,
   }
 }
 

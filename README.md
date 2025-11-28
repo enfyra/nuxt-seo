@@ -1,4 +1,4 @@
-# nuxt-seo
+# enfyra-nuxt-seo
 
 A powerful SEO optimization tool for Nuxt 4 that provides comprehensive SEO features including meta tags, Open Graph, Twitter Cards, structured data, robots.txt, and sitemap generation.
 
@@ -20,11 +20,11 @@ Optimized by [Enfyra Team](https://enfyra.io).
 ## Installation
 
 ```bash
-npm install nuxt-seo
+npm install enfyra-nuxt-seo
 # or
-yarn add nuxt-seo
+yarn add enfyra-nuxt-seo
 # or
-pnpm add nuxt-seo
+pnpm add enfyra-nuxt-seo
 ```
 
 ## Configuration
@@ -33,7 +33,7 @@ Add the module to your `nuxt.config.ts`:
 
 ```typescript
 export default defineNuxtConfig({
-  modules: ['nuxt-seo'],
+  modules: ['enfyra-nuxt-seo'],
   
   seo: {
     enabled: true, // Set to false to disable SEO (useful for staging)
@@ -264,7 +264,7 @@ Component for rendering structured data (JSON-LD).
 
 ```vue
 <script setup lang="ts">
-import { SEOHead } from 'nuxt-seo/src/components/SEOHead'
+import { SEOHead } from 'enfyra-nuxt-seo/src/components/SEOHead'
 
 const seoConfig = {
   title: 'Page Title',
@@ -287,7 +287,7 @@ Component for breadcrumb navigation with structured data.
 
 ```vue
 <script setup lang="ts">
-import { Breadcrumbs } from 'nuxt-seo/src/components/Breadcrumbs'
+import { Breadcrumbs } from 'enfyra-nuxt-seo/src/components/Breadcrumbs'
 
 const breadcrumbItems = [
   { name: 'Home', url: '/' },
@@ -347,7 +347,7 @@ The module provides full TypeScript support:
 ### Importing Types
 
 ```typescript
-import type { SEOConfig, ModuleOptions } from 'nuxt-seo'
+import type { SEOConfig, ModuleOptions } from 'enfyra-nuxt-seo'
 ```
 
 ## Examples
@@ -357,7 +357,7 @@ import type { SEOConfig, ModuleOptions } from 'nuxt-seo'
 ```typescript
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['nuxt-seo'],
+  modules: ['enfyra-nuxt-seo'],
   seo: {
     enabled: true,
     siteUrl: 'https://example.com',
@@ -442,7 +442,7 @@ usePageSEO({
 ```typescript
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['nuxt-seo'],
+  modules: ['enfyra-nuxt-seo'],
   seo: {
     enabled: process.env.NODE_ENV === 'production', // Disable in staging
     siteUrl: 'https://example.com',
@@ -474,7 +474,7 @@ export default defineNuxtConfig({
 
 1. Restart your TypeScript server
 2. Run `yarn nuxt prepare` or `npm run prepare`
-3. Check that `@nuxt-seo/module` is in your `node_modules`
+3. Check that `enfyra-nuxt-seo` is in your `node_modules`
 
 ### Robots.txt not generating?
 

@@ -8,22 +8,30 @@ export const usePageSEO = (pageConfig: Partial<SEOConfig> = {}) => {
   const seoConfig = publicConfig.seo || {}
   const route = useRoute()
   
-  const currentPath = route.path
+  const currentPath = String(route.path || '')
   const pages = seoConfig.pages || {}
   const pageConfigFromNuxt = (pages[currentPath] || {}) as Partial<SEOConfig>
-  const defaultUrl = seoConfig.siteUrl ? `${seoConfig.siteUrl}${currentPath}` : currentPath
+  const defaultUrl = seoConfig.siteUrl ? `${String(seoConfig.siteUrl)}${currentPath}` : currentPath
   const finalUrl = pageConfig.url || pageConfigFromNuxt.url || defaultUrl
   
+  const pageConfigFromNuxtSafe = pageConfigFromNuxt ? JSON.parse(JSON.stringify(pageConfigFromNuxt)) : {}
+  const pageConfigSafe = pageConfig ? JSON.parse(JSON.stringify(pageConfig)) : {}
+  
   const mergedConfig: SEOConfig = {
-    siteName: seoConfig.siteName,
-    locale: seoConfig.defaultLocale || 'en',
-    type: seoConfig.defaultType || 'website',
-    image: seoConfig.defaultImage || '',
-    url: finalUrl,
-    ...pageConfigFromNuxt,
-    ...pageConfig,
+    siteName: String(seoConfig.siteName || ''),
+    locale: String(seoConfig.defaultLocale || 'en'),
+    type: (seoConfig.defaultType || 'website') as 'website' | 'article' | 'product' | 'profile',
+    image: String(seoConfig.defaultImage || ''),
+    url: String(finalUrl),
+    ...pageConfigFromNuxtSafe,
+    ...pageConfigSafe,
   }
   
-  return useSEO(mergedConfig)
+  const result = useSEO(mergedConfig)
+  
+  return {
+    meta: result.meta,
+    structuredData: result.structuredData,
+  }
 }
 

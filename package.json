@@ -1,6 +1,6 @@
 {
-  "name": "nuxt-seo",
-  "version": "0.1.0",
+  "name": "enfyra-nuxt-seo",
+  "version": "0.1.1",
   "description": "A powerful, configurable SEO module for Nuxt 4",
   "type": "module",
   "main": "./module.ts",
@@ -13,17 +13,20 @@
     "./types": {
       "types": "./src/types.ts",
       "import": "./src/types.ts"
-    }
+    },
+    "./src/composables/usePageSEO": {
+      "types": "./src/composables/usePageSEO.ts",
+      "import": "./src/composables/usePageSEO.ts"
+    },
+    "./src/composables/useSEO": {
+      "types": "./src/composables/useSEO.ts",
+      "import": "./src/composables/useSEO.ts"
+    },
+    "./src/server/routes/robots": "./src/server/routes/robots.ts",
+    "./src/server/routes/robots.ts": "./src/server/routes/robots.ts",
+    "./src/server/routes/sitemap": "./src/server/routes/sitemap.ts",
+    "./src/server/routes/sitemap.ts": "./src/server/routes/sitemap.ts"
   },
-  "keywords": [
-    "nuxt",
-    "nuxt-module",
-    "seo",
-    "meta-tags",
-    "open-graph",
-    "structured-data",
-    "schema.org"
-  ],
   "repository": {
     "type": "git",
     "url": ""

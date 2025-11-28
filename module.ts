@@ -28,7 +28,7 @@ export interface ModuleOptions extends Partial<SEOConfig> {
 
 export default defineNuxtModule<ModuleOptions>({
   meta: {
-    name: 'nuxt-seo',
+    name: 'enfyra-nuxt-seo',
     configKey: 'seo',
     compatibility: {
       nuxt: '^4.0.0',
@@ -81,18 +81,16 @@ export default defineNuxtModule<ModuleOptions>({
     })
 
     if (options.robots?.enabled !== false) {
-      const robotsPath = resolve('./src/server/routes/robots.js')
       addServerHandler({
         route: '/robots.txt',
-        handler: robotsPath,
+        handler: 'enfyra-nuxt-seo/src/server/routes/robots',
       })
     }
 
     if (options.robots?.sitemap !== false) {
-      const sitemapPath = resolve('./src/server/routes/sitemap.js')
       addServerHandler({
         route: options.robots?.sitemapPath || '/sitemap.xml',
-        handler: sitemapPath,
+        handler: 'enfyra-nuxt-seo/src/server/routes/sitemap',
       })
     }
   },

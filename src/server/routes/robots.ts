@@ -42,3 +42,4 @@ Disallow: /
   event.node.res.setHeader('Content-Type', 'text/plain')
   return robotsTxt
 })
+

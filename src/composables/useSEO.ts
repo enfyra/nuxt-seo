@@ -136,6 +136,12 @@ export const useSEO = (config: SEOConfig | (() => SEOConfig)) => {
         href: currentConfig.canonical || currentConfig.url || currentSiteUrl,
       })
     }
+    
+    // Add manifest link to prevent 404 errors
+    linkArray.push({
+      rel: 'manifest',
+      href: '/site.webmanifest',
+    })
 
     const scriptArray = []
     if (currentConfig.structuredData) {

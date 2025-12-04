@@ -93,6 +93,12 @@ export default defineNuxtModule<ModuleOptions>({
         handler: 'enfyra-nuxt-seo/src/server/routes/sitemap',
       })
     }
+
+    // Add webmanifest handler to prevent 404 errors
+    addServerHandler({
+      route: '/site.webmanifest',
+      handler: 'enfyra-nuxt-seo/src/server/routes/webmanifest',
+    })
   },
 })
 

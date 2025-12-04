@@ -56,3 +56,17 @@ export interface ProductData {
   }
 }
 
+export interface OgImageConfig {
+  enabled?: boolean
+  viewport?: {
+    width?: number
+    height?: number
+  }
+  quality?: number
+  format?: 'png' | 'jpeg' | 'webp'
+  cache?: {
+    ttl?: number
+    memoryTtl?: number
+  }
+}
+

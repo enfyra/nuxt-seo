@@ -1,7 +1,7 @@
 {
-  "name": "enfyra-nuxt-seo",
-  "version": "0.1.8",
-  "description": "A powerful, configurable SEO module for Nuxt 4",
+  "name": "@enfyra/nuxt-seo",
+  "version": "0.1.9",
+  "description": "A powerful, configurable SEO module for Nuxt 4 with automatic OG image generation",
   "type": "module",
   "main": "./module.ts",
   "types": "./module.d.ts",
@@ -22,12 +22,17 @@
       "types": "./src/composables/useSEO.ts",
       "import": "./src/composables/useSEO.ts"
     },
+    "./src/types/nuxt-imports": {
+      "types": "./src/types/nuxt-imports.d.ts"
+    },
     "./src/server/routes/robots": "./src/server/routes/robots.ts",
     "./src/server/routes/robots.ts": "./src/server/routes/robots.ts",
     "./src/server/routes/sitemap": "./src/server/routes/sitemap.ts",
     "./src/server/routes/sitemap.ts": "./src/server/routes/sitemap.ts",
     "./src/server/routes/webmanifest": "./src/server/routes/webmanifest.ts",
-    "./src/server/routes/webmanifest.ts": "./src/server/routes/webmanifest.ts"
+    "./src/server/routes/webmanifest.ts": "./src/server/routes/webmanifest.ts",
+    "./src/server/routes/og": "./src/server/routes/og.ts",
+    "./src/server/routes/og.ts": "./src/server/routes/og.ts"
   },
   "repository": {
     "type": "git",
@@ -38,7 +43,10 @@
     "@nuxt/kit": "^4.0.0"
   },
   "dependencies": {
-    "@nuxt/kit": "^4.0.0"
+    "@nuxt/kit": "^4.0.0",
+    "puppeteer-core": "^24.32.0",
+    "@sparticuz/chromium": "^141.0.0",
+    "sharp": "^0.34.5"
   }
 }
 

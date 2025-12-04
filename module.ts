@@ -1,5 +1,5 @@
 import { defineNuxtModule, addImportsDir, addServerHandler, createResolver } from '@nuxt/kit'
-import type { SEOConfig } from './src/types'
+import type { SEOConfig, OgImageConfig } from './src/types'
 
 export interface ModuleOptions extends Partial<SEOConfig> {
   enabled?: boolean
@@ -24,6 +24,7 @@ export interface ModuleOptions extends Partial<SEOConfig> {
       appId?: string
     }
   }
+  ogImage?: OgImageConfig
 }
 
 export default defineNuxtModule<ModuleOptions>({
@@ -47,10 +48,22 @@ export default defineNuxtModule<ModuleOptions>({
       sitemap: true,
       sitemapPath: '/sitemap.xml',
     },
+    ogImage: {
+      enabled: false,
+      viewport: {
+        width: 1440,
+        height: 754,
+      },
+      quality: 85,
+      format: 'webp',
+      cache: {
+        ttl: 24 * 60 * 60 * 1000, // 24 hours
+        memoryTtl: 60 * 60 * 1000, // 1 hour
+      },
+    },
   },
   setup(options: ModuleOptions, nuxt: any) {
-    const metaUrl = (import.meta as any).url
-    const { resolve } = createResolver(metaUrl)
+    const { resolve } = createResolver(import.meta.url)
     
     nuxt.options.runtimeConfig.public = nuxt.options.runtimeConfig.public || {}
     ;(nuxt.options.runtimeConfig.public as any).seo = {
@@ -68,9 +81,35 @@ export default defineNuxtModule<ModuleOptions>({
         sitemap: options.robots?.sitemap !== false,
         sitemapPath: options.robots?.sitemapPath || '/sitemap.xml',
       },
+      ogImage: {
+        enabled: options.ogImage?.enabled ?? false,
+        viewport: {
+          width: options.ogImage?.viewport?.width ?? 1440,
+          height: options.ogImage?.viewport?.height ?? 754,
+        },
+        quality: options.ogImage?.quality ?? 85,
+        format: options.ogImage?.format ?? 'webp',
+        cache: {
+          ttl: options.ogImage?.cache?.ttl ?? 24 * 60 * 60 * 1000,
+          memoryTtl: options.ogImage?.cache?.memoryTtl ?? 60 * 60 * 1000,
+        },
+      },
     }
 
     addImportsDir(resolve('./src/composables'))
+    
+    nuxt.hook('prepare:types', ({ declarations, references }: any) => {
+      references.push({
+        path: resolve('./src/types/nuxt-imports.d.ts'),
+      })
+      
+      declarations.push(`
+declare global {
+  const usePageSEO: typeof import('@enfyra/nuxt-seo/src/composables/usePageSEO').usePageSEO
+  const useSEO: typeof import('@enfyra/nuxt-seo/src/composables/useSEO').useSEO
+}
+      `)
+    })
 
     nuxt.hook('components:dirs', (dirs: any[]) => {
       dirs.push({
@@ -83,22 +122,30 @@ export default defineNuxtModule<ModuleOptions>({
     if (options.robots?.enabled !== false) {
       addServerHandler({
         route: '/robots.txt',
-        handler: 'enfyra-nuxt-seo/src/server/routes/robots',
+        handler: '@enfyra/nuxt-seo/src/server/routes/robots.ts',
       })
     }
 
     if (options.robots?.sitemap !== false) {
       addServerHandler({
         route: options.robots?.sitemapPath || '/sitemap.xml',
-        handler: 'enfyra-nuxt-seo/src/server/routes/sitemap',
+        handler: '@enfyra/nuxt-seo/src/server/routes/sitemap.ts',
       })
     }
 
     // Add webmanifest handler to prevent 404 errors
     addServerHandler({
       route: '/site.webmanifest',
-      handler: 'enfyra-nuxt-seo/src/server/routes/webmanifest',
+      handler: '@enfyra/nuxt-seo/src/server/routes/webmanifest.ts',
     })
+
+    // Add OG image generation handler if enabled
+    if (options.ogImage?.enabled) {
+      addServerHandler({
+        route: '/api/og',
+        handler: '@enfyra/nuxt-seo/src/server/routes/og.ts',
+      })
+    }
   },
 })
 

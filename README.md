@@ -1,6 +1,6 @@
-# enfyra-nuxt-seo
+# @enfyra/nuxt-seo
 
-A powerful SEO optimization tool for Nuxt 4 that provides comprehensive SEO features including meta tags, Open Graph, Twitter Cards, structured data, robots.txt, and sitemap generation.
+A powerful SEO optimization tool for Nuxt 4 that provides comprehensive SEO features including meta tags, Open Graph, Twitter Cards, structured data, robots.txt, sitemap generation, and automatic OG image generation.
 
 Optimized by [Enfyra Team](https://enfyra.io).
 
@@ -12,7 +12,10 @@ Optimized by [Enfyra Team](https://enfyra.io).
 - ✅ **Structured Data**: JSON-LD schema.org markup (Organization, Website, WebPage, Article, Product, etc.)
 - ✅ **Robots.txt**: Dynamic generation with configurable rules
 - ✅ **Sitemap.xml**: Automatic sitemap generation from page configurations
-- ✅ **TypeScript**: Full TypeScript support with auto-imports
+- ✅ **OG Image Generation**: Automatic screenshot-based OG image generation with caching
+- ✅ **Full TypeScript Support**: Complete type definitions with IntelliSense
+- ✅ **Auto-imports**: Zero-config auto-imports for all composables (`usePageSEO`, `useSEO`)
+- ✅ **Type-safe Configuration**: Type-safe config in `nuxt.config.ts` with autocomplete
 - ✅ **Per-page Configuration**: Configure SEO per page in `nuxt.config.ts` or runtime
 - ✅ **Global Configuration**: Set defaults for all pages
 - ✅ **Disable SEO**: Easy toggle for staging/testing environments
@@ -20,11 +23,11 @@ Optimized by [Enfyra Team](https://enfyra.io).
 ## Installation
 
 ```bash
-npm install enfyra-nuxt-seo
+npm install @enfyra/nuxt-seo
 # or
-yarn add enfyra-nuxt-seo
+yarn add @enfyra/nuxt-seo
 # or
-pnpm add enfyra-nuxt-seo
+pnpm add @enfyra/nuxt-seo
 ```
 
 ## Configuration
@@ -33,7 +36,7 @@ Add the module to your `nuxt.config.ts`:
 
 ```typescript
 export default defineNuxtConfig({
-  modules: ['enfyra-nuxt-seo'],
+  modules: ['@enfyra/nuxt-seo'],
   
   seo: {
     enabled: true, // Set to false to disable SEO (useful for staging)
@@ -87,11 +90,47 @@ export default defineNuxtConfig({
 })
 ```
 
+## TypeScript & Auto-imports
+
+### 🎯 Zero-Configuration Auto-imports
+
+**No manual imports required!** All composables are automatically available in your Nuxt app:
+
+- ✅ `usePageSEO` - Automatically imported
+- ✅ `useSEO` - Automatically imported
+- ✅ Full TypeScript IntelliSense support
+- ✅ Type-safe configuration in `nuxt.config.ts`
+
+### 📦 Importing Types
+
+If you need to use types in your code, you can import them:
+
+```typescript
+import type { 
+  SEOConfig, 
+  ModuleOptions,
+  OgImageConfig 
+} from '@enfyra/nuxt-seo'
+```
+
+### 🔍 Type Definitions
+
+The module provides complete TypeScript definitions for:
+
+- `SEOConfig` - Main SEO configuration interface
+- `ModuleOptions` - Module configuration options
+- `OgImageConfig` - OG image generation configuration
+- `PageSEOConfig` - Extended config for per-page SEO
+- `RobotsConfig` - Robots.txt configuration
+- `SocialConfig` - Social media configuration
+
+All types are automatically available in your IDE with full IntelliSense support.
+
 ## Usage
 
 ### Auto-imported Composables
 
-The module automatically imports `usePageSEO` and `useSEO` composables. No manual imports needed!
+**No manual imports needed!** The module automatically imports `usePageSEO` and `useSEO` composables. Just use them directly in your components:
 
 ### Basic Usage in Pages
 
@@ -306,7 +345,7 @@ Component for rendering structured data (JSON-LD).
 
 ```vue
 <script setup lang="ts">
-import { SEOHead } from 'enfyra-nuxt-seo/src/components/SEOHead'
+import { SEOHead } from '@enfyra/nuxt-seo/src/components/SEOHead'
 
 const seoConfig = {
   title: 'Page Title',
@@ -329,7 +368,7 @@ Component for breadcrumb navigation with structured data.
 
 ```vue
 <script setup lang="ts">
-import { Breadcrumbs } from 'enfyra-nuxt-seo/src/components/Breadcrumbs'
+import { Breadcrumbs } from '@enfyra/nuxt-seo/src/components/Breadcrumbs'
 
 const breadcrumbItems = [
   { name: 'Home', url: '/' },
@@ -342,6 +381,80 @@ const breadcrumbItems = [
   <Breadcrumbs :items="breadcrumbItems" />
 </template>
 ```
+
+## OG Image Generation
+
+The module can automatically generate OG images by taking screenshots of your pages. This feature is disabled by default and can be enabled in your configuration.
+
+### Configuration
+
+```typescript
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@enfyra/nuxt-seo'],
+  seo: {
+    ogImage: {
+      enabled: true,
+      viewport: {
+        width: 1440,
+        height: 754,
+      },
+      quality: 85,
+      format: 'webp',
+      cache: {
+        ttl: 24 * 60 * 60 * 1000, // 24 hours
+        memoryTtl: 60 * 60 * 1000, // 1 hour
+      },
+    }
+  }
+})
+```
+
+### Usage
+
+Once enabled, the module automatically creates an API endpoint at `/api/og` that generates OG images. You can use it in your pages:
+
+```vue
+<script setup lang="ts">
+const config = useRuntimeConfig()
+const seoConfig = config.public.seo as any
+const siteUrl = seoConfig?.siteUrl || 'https://example.com'
+
+usePageSEO({
+  title: 'My Page Title',
+  description: 'My page description',
+  image: `${siteUrl}/api/og?path=${encodeURIComponent('/my-page')}`,
+})
+</script>
+```
+
+### How It Works
+
+1. **Screenshot Capture**: Uses Puppeteer to capture screenshots of your pages
+2. **Image Optimization**: Converts to WebP/JPEG format with configurable quality
+3. **Caching**: Two-tier caching system:
+   - **Memory cache**: Fast access for frequently requested images (1 hour default)
+   - **File cache**: Persistent cache stored in `.enfyra-og-cache/` directory (24 hours default)
+4. **Automatic URL Detection**: Automatically detects the correct URL based on request headers (supports staging/production)
+
+### Requirements
+
+- **Development**: Requires Chrome/Chromium installed locally
+- **Production**: Uses `@sparticuz/chromium` for serverless environments (Vercel, Netlify, etc.)
+
+### Environment Variables
+
+- `CHROME_PATH`: Custom path to Chrome/Chromium executable (optional, for development)
+
+### Cache Management
+
+Cache files are stored in `.enfyra-og-cache/` directory. You can safely delete this folder to clear the cache. The cache key is based on the page path and host, so different environments (staging/production) have separate caches.
+
+### Performance
+
+- **First request**: ~2-5 seconds (screenshot generation)
+- **Cached requests**: <100ms (served from cache)
+- **File size**: ~100-150KB (WebP format, 1440x754)
 
 ## Server Routes
 
@@ -379,18 +492,82 @@ Automatically generated from your page configurations:
 
 ## TypeScript Support
 
-The module provides full TypeScript support:
+### 🚀 Full TypeScript Support
 
-- ✅ Auto-imported composables (`usePageSEO`, `useSEO`)
-- ✅ Type definitions for all interfaces
-- ✅ Type-safe configuration in `nuxt.config.ts`
-- ✅ IntelliSense support in your IDE
+The module is built with TypeScript from the ground up and provides:
 
-### Importing Types
+- ✅ **Auto-imported Composables**: `usePageSEO` and `useSEO` are automatically available with full type inference
+- ✅ **Type-safe Configuration**: All configuration options in `nuxt.config.ts` are fully typed with IntelliSense
+- ✅ **Complete Type Definitions**: All interfaces, types, and configurations are fully typed
+- ✅ **IntelliSense Support**: Full autocomplete and type checking in VS Code, WebStorm, and other IDEs
+- ✅ **Type Inference**: Automatic type inference for reactive configurations
+
+### 📝 Type Definitions
+
+All types are exported and available for import:
 
 ```typescript
-import type { SEOConfig, ModuleOptions } from 'enfyra-nuxt-seo'
+import type { 
+  SEOConfig,           // Main SEO configuration
+  ModuleOptions,       // Module configuration
+  OgImageConfig,       // OG image generation config
+  PageSEOConfig,       // Extended page SEO config
+  RobotsConfig,        // Robots.txt config
+  SocialConfig         // Social media config
+} from '@enfyra/nuxt-seo'
 ```
+
+### 💡 Type-safe Usage Examples
+
+```typescript
+// Type-safe configuration in nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@enfyra/nuxt-seo'],
+  seo: {
+    siteUrl: 'https://example.com', // ✅ Type-checked
+    defaultType: 'website',         // ✅ Literal type: 'website' | 'article' | 'product' | 'profile'
+    ogImage: {
+      enabled: true,                  // ✅ Type-checked
+      format: 'webp',                // ✅ Literal type: 'png' | 'jpeg' | 'webp'
+      quality: 85,                   // ✅ Number type
+    }
+  }
+})
+```
+
+```vue
+<script setup lang="ts">
+// ✅ usePageSEO is auto-imported with full type inference
+// ✅ All parameters are type-checked
+usePageSEO({
+  title: 'My Page',           // ✅ string
+  description: 'Description',  // ✅ string
+  type: 'article',            // ✅ 'website' | 'article' | 'product' | 'profile'
+  keywords: ['tag1', 'tag2'], // ✅ string[]
+  image: '/og.png',           // ✅ string
+})
+
+// ✅ Reactive usage with type inference
+const article = computed(() => ({
+  title: 'Article Title',
+  description: 'Article description',
+}))
+
+usePageSEO(() => ({
+  title: article.value.title,      // ✅ Type-safe access
+  description: article.value.description,
+}))
+</script>
+```
+
+### 🔧 Troubleshooting TypeScript
+
+If you encounter TypeScript errors:
+
+1. **Restart TypeScript Server**: In VS Code, press `Cmd/Ctrl + Shift + P` → "TypeScript: Restart TS Server"
+2. **Run Nuxt Prepare**: `yarn nuxt prepare` or `npm run prepare`
+3. **Check Module Installation**: Ensure `@enfyra/nuxt-seo` is in `node_modules`
+4. **Verify Auto-imports**: Check that composables are available without imports (they should be!)
 
 ## Examples
 
@@ -399,7 +576,7 @@ import type { SEOConfig, ModuleOptions } from 'enfyra-nuxt-seo'
 ```typescript
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['enfyra-nuxt-seo'],
+  modules: ['@enfyra/nuxt-seo'],
   seo: {
     enabled: true,
     siteUrl: 'https://example.com',
@@ -484,7 +661,7 @@ usePageSEO({
 ```typescript
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['enfyra-nuxt-seo'],
+  modules: ['@enfyra/nuxt-seo'],
   seo: {
     enabled: process.env.NODE_ENV === 'production', // Disable in staging
     siteUrl: 'https://example.com',
@@ -512,11 +689,13 @@ export default defineNuxtConfig({
 3. Check browser console for errors
 4. Ensure you're calling `usePageSEO()` in your pages
 
-### Types not working?
+### Types or Auto-imports not working?
 
-1. Restart your TypeScript server
-2. Run `yarn nuxt prepare` or `npm run prepare`
-3. Check that `enfyra-nuxt-seo` is in your `node_modules`
+1. **Restart TypeScript Server**: In VS Code, press `Cmd/Ctrl + Shift + P` → "TypeScript: Restart TS Server"
+2. **Run Nuxt Prepare**: `yarn nuxt prepare` or `npm run prepare` to regenerate types
+3. **Check Module Installation**: Ensure `@enfyra/nuxt-seo` is properly installed in `node_modules`
+4. **Verify Auto-imports**: Composables should be available without imports - if not, check your Nuxt version (requires Nuxt 4+)
+5. **Clear Cache**: Delete `.nuxt` folder and run `yarn nuxt prepare` again
 
 ### Robots.txt not generating?
 

@@ -1,6 +1,6 @@
 {
   "name": "enfyra-nuxt-seo",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "A powerful, configurable SEO module for Nuxt 4",
   "type": "module",
   "main": "./module.ts",
@@ -25,7 +25,9 @@
     "./src/server/routes/robots": "./src/server/routes/robots.ts",
     "./src/server/routes/robots.ts": "./src/server/routes/robots.ts",
     "./src/server/routes/sitemap": "./src/server/routes/sitemap.ts",
-    "./src/server/routes/sitemap.ts": "./src/server/routes/sitemap.ts"
+    "./src/server/routes/sitemap.ts": "./src/server/routes/sitemap.ts",
+    "./src/server/routes/webmanifest": "./src/server/routes/webmanifest.ts",
+    "./src/server/routes/webmanifest.ts": "./src/server/routes/webmanifest.ts"
   },
   "repository": {
     "type": "git",

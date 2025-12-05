@@ -1,5 +1,5 @@
 import { defineNuxtModule, addImportsDir, addServerHandler, createResolver } from '@nuxt/kit'
-import type { SEOConfig, OgImageConfig } from './src/types'
+import type { SEOConfig, OgImageConfig, WebManifestConfig } from './src/types'
 
 export interface ModuleOptions extends Partial<SEOConfig> {
   enabled?: boolean
@@ -25,6 +25,7 @@ export interface ModuleOptions extends Partial<SEOConfig> {
     }
   }
   ogImage?: OgImageConfig
+  webmanifest?: WebManifestConfig
 }
 
 export default defineNuxtModule<ModuleOptions>({
@@ -94,6 +95,7 @@ export default defineNuxtModule<ModuleOptions>({
           memoryTtl: options.ogImage?.cache?.memoryTtl ?? 60 * 60 * 1000,
         },
       },
+      webmanifest: options.webmanifest || {},
     }
 
     addImportsDir(resolve('./src/composables'))

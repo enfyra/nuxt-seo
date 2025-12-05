@@ -1,6 +1,6 @@
 {
   "name": "@enfyra/nuxt-seo",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "A powerful, configurable SEO module for Nuxt 4 with automatic OG image generation",
   "type": "module",
   "main": "./module.ts",
@@ -44,9 +44,13 @@
   },
   "dependencies": {
     "@nuxt/kit": "^4.0.0",
+    "h3": "^1.15.0",
     "puppeteer-core": "^24.32.0",
     "@sparticuz/chromium": "^141.0.0",
     "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
   }
 }
 

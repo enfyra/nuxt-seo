@@ -12,6 +12,7 @@ Optimized by [Enfyra Team](https://enfyra.io).
 - ✅ **Structured Data**: JSON-LD schema.org markup (Organization, Website, WebPage, Article, Product, etc.)
 - ✅ **Robots.txt**: Dynamic generation with configurable rules
 - ✅ **Sitemap.xml**: Automatic sitemap generation from page configurations
+- ✅ **Web Manifest**: PWA support with configurable icons and manifest properties
 - ✅ **OG Image Generation**: Automatic screenshot-based OG image generation with caching
 - ✅ **Full TypeScript Support**: Complete type definitions with IntelliSense
 - ✅ **Auto-imports**: Zero-config auto-imports for all composables (`usePageSEO`, `useSEO`)
@@ -85,6 +86,26 @@ export default defineNuxtConfig({
       facebook: {
         appId: 'your-app-id'
       }
+    },
+    
+    // Web Manifest configuration (PWA)
+    webmanifest: {
+      icons: [
+        {
+          src: '/icon-192x192.png',
+          sizes: '192x192',
+          type: 'image/png',
+        },
+        {
+          src: '/icon-512x512.png',
+          sizes: '512x512',
+          type: 'image/png',
+        },
+      ],
+      start_url: '/',
+      display: 'standalone',
+      background_color: '#ffffff',
+      theme_color: '#000000',
     }
   }
 })
@@ -109,7 +130,8 @@ If you need to use types in your code, you can import them:
 import type { 
   SEOConfig, 
   ModuleOptions,
-  OgImageConfig 
+  OgImageConfig,
+  WebManifestConfig
 } from '@enfyra/nuxt-seo'
 ```
 
@@ -120,6 +142,7 @@ The module provides complete TypeScript definitions for:
 - `SEOConfig` - Main SEO configuration interface
 - `ModuleOptions` - Module configuration options
 - `OgImageConfig` - OG image generation configuration
+- `WebManifestConfig` - Web manifest (PWA) configuration
 - `PageSEOConfig` - Extended config for per-page SEO
 - `RobotsConfig` - Robots.txt configuration
 - `SocialConfig` - Social media configuration
@@ -248,6 +271,7 @@ interface ModuleOptions {
   pages?: Record<string, PageSEOConfig> // Per-page configuration
   robots?: RobotsConfig // Robots.txt configuration
   social?: SocialConfig // Social media configuration
+  webmanifest?: WebManifestConfig // Web manifest (PWA) configuration
 }
 ```
 
@@ -460,6 +484,92 @@ Cache files are stored in `.enfyra-og-cache/` directory. You can safely delete t
 
 The module automatically generates:
 
+### `/site.webmanifest`
+
+Web App Manifest file for PWA support. The manifest is automatically generated based on your configuration. If no icons are configured, the manifest will be generated without icons to prevent errors.
+
+**Configuration:**
+
+```typescript
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@enfyra/nuxt-seo'],
+  seo: {
+    webmanifest: {
+      icons: [
+        {
+          src: '/icon-192x192.png',
+          sizes: '192x192',
+          type: 'image/png',
+        },
+        {
+          src: '/icon-512x512.png',
+          sizes: '512x512',
+          type: 'image/png',
+        },
+      ],
+      start_url: '/',
+      display: 'standalone', // 'fullscreen' | 'standalone' | 'minimal-ui' | 'browser'
+      background_color: '#ffffff',
+      theme_color: '#000000',
+    }
+  }
+})
+```
+
+**WebManifestConfig Interface:**
+
+```typescript
+interface WebManifestConfig {
+  icons?: Array<{
+    src: string
+    sizes: string
+    type?: string
+    purpose?: string
+  }>
+  start_url?: string
+  display?: 'fullscreen' | 'standalone' | 'minimal-ui' | 'browser'
+  background_color?: string
+  theme_color?: string
+}
+```
+
+**Important Notes:**
+
+- **Icons are optional**: If you don't configure icons, the manifest will be generated without them. This prevents errors when icon files don't exist.
+- **Automatic link tag**: The module automatically adds a `<link rel="manifest">` tag to your pages pointing to `/site.webmanifest`.
+- **Default values**: If not configured, defaults are:
+  - `start_url`: `/`
+  - `display`: `standalone`
+  - `background_color`: `#ffffff`
+  - `theme_color`: `#000000`
+
+**Example Output:**
+
+```json
+{
+  "name": "My Website",
+  "short_name": "My Website",
+  "description": "Website description",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+```
+
 ### `/robots.txt`
 
 Dynamically generated based on your configuration:
@@ -511,6 +621,7 @@ import type {
   SEOConfig,           // Main SEO configuration
   ModuleOptions,       // Module configuration
   OgImageConfig,       // OG image generation config
+  WebManifestConfig,   // Web manifest (PWA) config
   PageSEOConfig,       // Extended page SEO config
   RobotsConfig,        // Robots.txt config
   SocialConfig         // Social media config

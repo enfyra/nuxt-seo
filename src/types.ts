@@ -70,3 +70,16 @@ export interface OgImageConfig {
   }
 }
 
+export interface WebManifestConfig {
+  icons?: Array<{
+    src: string
+    sizes: string
+    type?: string
+    purpose?: string
+  }>
+  start_url?: string
+  display?: 'fullscreen' | 'standalone' | 'minimal-ui' | 'browser'
+  background_color?: string
+  theme_color?: string
+}
+

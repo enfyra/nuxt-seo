@@ -3,31 +3,25 @@ import { useRuntimeConfig } from '#imports'
 
 export default defineEventHandler((event) => {
   const config = useRuntimeConfig()
-  const publicConfig = config.public || {}
+  const publicConfig = (config.public || {}) as any
   const seoConfig = publicConfig.seo || {}
   const siteUrl = seoConfig.siteUrl || ''
   const siteName = seoConfig.siteName || ''
+  const webmanifestConfig = seoConfig.webmanifest || {}
 
-  const manifest = {
+  const manifest: Record<string, any> = {
     name: siteName,
     short_name: siteName,
     description: seoConfig.description || '',
-    start_url: '/',
-    display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#000000',
-    icons: [
-      {
-        src: '/icon-192x192.png',
-        sizes: '192x192',
-        type: 'image/png',
-      },
-      {
-        src: '/icon-512x512.png',
-        sizes: '512x512',
-        type: 'image/png',
-      },
-    ],
+    start_url: webmanifestConfig.start_url || '/',
+    display: webmanifestConfig.display || 'standalone',
+    background_color: webmanifestConfig.background_color || '#ffffff',
+    theme_color: webmanifestConfig.theme_color || '#000000',
+  }
+
+  // Only include icons if configured
+  if (webmanifestConfig.icons && webmanifestConfig.icons.length > 0) {
+    manifest.icons = webmanifestConfig.icons
   }
 
   event.node.res.setHeader('Content-Type', 'application/manifest+json')

@@ -8,7 +8,7 @@ import { defineEventHandler, getQuery, getHeaders, setHeader, createError } from
 import { useRuntimeConfig } from '#imports'
 
 const cacheDir = join(process.cwd(), '.enfyra-og-cache')
-const cacheMap = new Map<string, { buffer: Buffer; timestamp: number }>()
+const cacheMap = new Map()
 
 async function ensureCacheDir() {
   try {
@@ -18,12 +18,12 @@ async function ensureCacheDir() {
   }
 }
 
-function getCacheKey(path: string, host: string): string {
+function getCacheKey(path, host) {
   const key = host ? `${host}${path}` : path
   return createHash('md5').update(key).digest('hex')
 }
 
-async function getCachedImage(cacheKey: string, cacheTtl: number, memoryTtl: number): Promise<Buffer | null> {
+async function getCachedImage(cacheKey, cacheTtl, memoryTtl) {
   const memoryCache = cacheMap.get(cacheKey)
   if (memoryCache && Date.now() - memoryCache.timestamp < memoryTtl) {
     return memoryCache.buffer
@@ -52,7 +52,7 @@ async function getCachedImage(cacheKey: string, cacheTtl: number, memoryTtl: num
   return null
 }
 
-async function saveCachedImage(cacheKey: string, buffer: Buffer, format: string = 'webp'): Promise<void> {
+async function saveCachedImage(cacheKey, buffer, format = 'webp') {
   try {
     await ensureCacheDir()
     const cacheFile = join(cacheDir, `${cacheKey}.${format}`)
@@ -99,10 +99,17 @@ export default defineEventHandler(async (event) => {
     targetUrl = `${siteUrl}${path}`
   }
 
-  const viewport = ogImageConfig.viewport || { width: 1440, height: 754 }
+  const defaultImage = seoConfig.defaultImage || ''
+
+  const defaultViewport = ogImageConfig.viewport || { width: 1440, height: 754 }
   const quality = ogImageConfig.quality || 85
   const defaultFormat = ogImageConfig.format || 'webp'
   const format = isFacebookCrawler ? 'jpeg' : defaultFormat
+  
+  const viewport = isFacebookCrawler 
+    ? { width: 1200, height: 630 }
+    : defaultViewport
+  
   const cacheTtl = ogImageConfig.cache?.ttl || 24 * 60 * 60 * 1000
   const memoryTtl = ogImageConfig.cache?.memoryTtl || 60 * 60 * 1000
 
@@ -110,27 +117,32 @@ export default defineEventHandler(async (event) => {
   const cached = await getCachedImage(cacheKey, cacheTtl, memoryTtl)
   
   if (cached) {
-    setHeader(event, 'Content-Type', `image/${format}`)
-    const cacheMaxAge = isFacebookCrawler ? 604800 : 86400
-    setHeader(event, 'Cache-Control', `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}, immutable`)
-    setHeader(event, 'X-Content-Type-Options', 'nosniff')
-    return cached
+    if (!cached || cached.length === 0) {
+      console.warn('Cached image is empty, regenerating...')
+    } else {
+      const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png'
+      setHeader(event, 'Content-Type', mimeType)
+      const cacheMaxAge = isFacebookCrawler ? 604800 : 86400
+      setHeader(event, 'Cache-Control', `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}, immutable`)
+      setHeader(event, 'X-Content-Type-Options', 'nosniff')
+      return cached
+    }
   }
 
+  let browser = null
   try {
     const isProduction = process.env.NODE_ENV === 'production'
     
-    let browserOptions: { headless: boolean; args: string[]; executablePath?: string } = {
+    let browserOptions = {
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     }
     
     if (isProduction) {
-      browserOptions = {
-        ...browserOptions,
+      browserOptions = Object.assign(browserOptions, {
         args: chromium.args,
         executablePath: await chromium.executablePath(),
-      }
+      })
     } else {
       const chromePaths = [
         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -141,37 +153,44 @@ export default defineEventHandler(async (event) => {
         chromePaths.push(process.env.CHROME_PATH)
       }
       
+      let foundPath = null
       for (const chromePath of chromePaths) {
         try {
           await access(chromePath)
-          browserOptions.executablePath = chromePath
+          foundPath = chromePath
           break
         } catch {
           continue
         }
       }
       
-      if (!browserOptions.executablePath) {
+      if (foundPath) {
+        browserOptions = Object.assign(browserOptions, { executablePath: foundPath })
+      } else {
         throw new Error('Chrome/Chromium executable not found. Please install Chrome or set CHROME_PATH environment variable.')
       }
     }
     
-    const browser = await puppeteer.launch(browserOptions)
+    browser = await puppeteer.launch(browserOptions)
 
     const page = await browser.newPage()
     
     await page.setViewport({
-      width: viewport.width || 1440,
-      height: viewport.height || 754,
+      width: viewport.width || 1200,
+      height: viewport.height || 630,
       deviceScaleFactor: 1,
     })
 
     const waitTime = isFacebookCrawler ? 2000 : 1000
     
-    await page.goto(targetUrl, {
-      waitUntil: 'networkidle0',
-      timeout: isFacebookCrawler ? 45000 : 30000,
-    })
+    try {
+      await page.goto(targetUrl, {
+        waitUntil: 'networkidle0',
+        timeout: isFacebookCrawler ? 45000 : 30000,
+      })
+    } catch (gotoError) {
+      console.warn('Page goto timeout or error, continuing anyway:', gotoError instanceof Error ? gotoError.message : 'Unknown')
+    }
 
     await page.evaluate(() => {
       // @ts-ignore - document is available in browser context
@@ -193,18 +212,21 @@ export default defineEventHandler(async (event) => {
     await new Promise(resolve => setTimeout(resolve, waitTime))
     
     if (isFacebookCrawler) {
-      await page.evaluate(() => {
-        return new Promise((resolve) => {
-          // @ts-ignore
-          if (document.readyState === 'complete') {
-            resolve(true)
-          } else {
+      try {
+        await page.evaluate(() => {
+          return new Promise((resolve) => {
             // @ts-ignore
-            window.addEventListener('load', () => resolve(true), { once: true })
-            setTimeout(() => resolve(true), 1000)
-          }
+            if (document.readyState === 'complete') {
+              resolve(true)
+            } else {
+              // @ts-ignore
+              window.addEventListener('load', () => resolve(true), { once: true })
+              setTimeout(() => resolve(true), 1000)
+            }
+          })
         })
-      })
+      } catch {
+      }
     }
 
     const screenshot = await page.screenshot({
@@ -212,21 +234,32 @@ export default defineEventHandler(async (event) => {
       clip: {
         x: 0,
         y: 0,
-        width: viewport.width || 1440,
-        height: viewport.height || 754,
+        width: viewport.width || 1200,
+        height: viewport.height || 630,
       },
     })
 
-    await browser.close()
+    if (browser) {
+      await browser.close()
+      browser = null
+    }
 
     let imageBuffer
     
     if (format === 'webp') {
       imageBuffer = await sharp(screenshot)
+        .resize(viewport.width, viewport.height, {
+          fit: 'cover',
+          position: 'center'
+        })
         .webp({ quality })
         .toBuffer()
     } else if (format === 'jpeg') {
       imageBuffer = await sharp(screenshot)
+        .resize(viewport.width, viewport.height, {
+          fit: 'cover',
+          position: 'center'
+        })
         .jpeg({ 
           quality: isFacebookCrawler ? 92 : quality,
           mozjpeg: true,
@@ -234,22 +267,84 @@ export default defineEventHandler(async (event) => {
         })
         .toBuffer()
     } else {
-      imageBuffer = screenshot
+      imageBuffer = await sharp(screenshot)
+        .resize(viewport.width, viewport.height, {
+          fit: 'cover',
+          position: 'center'
+        })
+        .png()
+        .toBuffer()
+    }
+
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw new Error('Generated image buffer is empty')
+    }
+
+    if (imageBuffer.length > 8 * 1024 * 1024) {
+      console.warn(`Image size ${imageBuffer.length} exceeds 8MB limit, compressing...`)
+      if (format === 'jpeg') {
+        imageBuffer = await sharp(imageBuffer)
+          .jpeg({ quality: 75, mozjpeg: true })
+          .toBuffer()
+      }
     }
 
     await saveCachedImage(cacheKey, Buffer.from(imageBuffer), format)
 
-    setHeader(event, 'Content-Type', `image/${format}`)
+    const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png'
+    setHeader(event, 'Content-Type', mimeType)
     const cacheMaxAge = isFacebookCrawler ? 604800 : 86400
     setHeader(event, 'Cache-Control', `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}, immutable`)
     setHeader(event, 'X-Content-Type-Options', 'nosniff')
+    if (isFacebookCrawler) {
+      setHeader(event, 'X-Facebook-Debug', '1')
+    }
     const etag = createHash('md5').update(imageBuffer).digest('hex')
     setHeader(event, 'ETag', `"${etag}"`)
 
     return imageBuffer
   } catch (e) {
+    if (browser) {
+      try {
+        await browser.close()
+      } catch {
+      }
+    }
+    
     const errorMessage = e instanceof Error ? e.message : 'Unknown error'
-    console.error('OG Image capture error:', errorMessage)
+    console.error('OG Image capture error:', errorMessage, {
+      path,
+      targetUrl,
+      isFacebookCrawler,
+      error: e instanceof Error ? e.stack : e
+    })
+    
+    if (defaultImage && defaultImage.startsWith('http')) {
+      setHeader(event, 'Location', defaultImage)
+      setHeader(event, 'Cache-Control', 'public, max-age=3600')
+      throw createError({
+        statusCode: 302,
+        message: 'Redirecting to default image',
+      })
+    }
+    
+    if (defaultImage) {
+      try {
+        const defaultImagePath = defaultImage.startsWith('/') ? defaultImage : `/${defaultImage}`
+        const defaultImageUrl = `${protocol}://${host}${defaultImagePath}`
+        setHeader(event, 'Location', defaultImageUrl)
+        setHeader(event, 'Cache-Control', 'public, max-age=3600')
+        throw createError({
+          statusCode: 302,
+          message: 'Redirecting to default image',
+        })
+      } catch (redirectError) {
+        if (redirectError && typeof redirectError === 'object' && 'statusCode' in redirectError && redirectError.statusCode === 302) {
+          throw redirectError
+        }
+      }
+    }
+    
     throw createError({
       statusCode: 500,
       message: `Failed to capture image: ${errorMessage}`,

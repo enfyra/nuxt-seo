@@ -1,6 +1,6 @@
 {
   "name": "@enfyra/nuxt-seo",
-  "version": "0.1.16",
+  "version": "0.1.19",
   "description": "A powerful, configurable SEO module for Nuxt 4 with automatic OG image generation",
   "type": "module",
   "main": "./dist/module.mjs",
@@ -63,7 +63,9 @@
     "./src/server/routes/webmanifest": "./src/server/routes/webmanifest.ts",
     "./src/server/routes/webmanifest.ts": "./src/server/routes/webmanifest.ts",
     "./src/server/routes/og": "./src/server/routes/og.ts",
-    "./src/server/routes/og.ts": "./src/server/routes/og.ts"
+    "./src/server/routes/og.ts": "./src/server/routes/og.ts",
+    "./src/server/middleware/og-warmup": "./src/server/middleware/og-warmup.ts",
+    "./src/server/middleware/og-warmup.ts": "./src/server/middleware/og-warmup.ts"
   },
   "repository": {
     "type": "git",

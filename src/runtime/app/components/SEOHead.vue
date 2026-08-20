@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRuntimeConfig } from '#imports'
 import { useSEO } from '../composables/useSEO'
-import type { SEOConfig } from '../types'
+import type { SEOConfig } from '../../../types'
 import JsonLd from './JsonLd.vue'
 
 interface Props {
@@ -74,4 +74,3 @@ const finalStructuredData = computed(() => {
 <template>
   <JsonLd v-if="finalStructuredData" :data="finalStructuredData" />
 </template>
-

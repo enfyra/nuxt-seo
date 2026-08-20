@@ -58,6 +58,7 @@ export interface ProductData {
 
 export interface OgImageConfig {
   enabled?: boolean
+  route?: string
   viewport?: {
     width?: number
     height?: number
@@ -67,6 +68,14 @@ export interface OgImageConfig {
   cache?: {
     ttl?: number
     memoryTtl?: number
+  }
+  warmup?: {
+    enabled?: boolean
+    origin?: string
+    paths?: string[]
+    delay?: number
+    concurrency?: number
+    includeFacebook?: boolean
   }
 }
 
@@ -83,3 +92,23 @@ export interface WebManifestConfig {
   theme_color?: string
 }
 
+export interface SitemapRoute {
+  url: string
+  changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never'
+  priority?: number
+  lastmod?: string
+}
+
+export type SitemapHandler = () => Promise<SitemapRoute[]> | SitemapRoute[]
+
+export interface RobotsConfig {
+  enabled?: boolean
+  disallow?: string[]
+  sitemap?: boolean
+  sitemapPath?: string
+  sitemapHandler?: SitemapHandler
+}
+
+export interface RuntimeSEOConfig extends SEOConfig {
+  robots?: RobotsConfig
+}

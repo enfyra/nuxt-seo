@@ -1,5 +1,5 @@
 import { useRuntimeConfig, useHead, computed } from '#imports'
-import type { SEOConfig } from '../types'
+import type { SEOConfig } from '../../../types'
 
 export const useSEO = (config: SEOConfig | (() => SEOConfig)) => {
   const runtimeConfig = useRuntimeConfig()

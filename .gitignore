@@ -8,4 +8,3 @@ playground/.output
 playground/node_modules
 coverage
 *.tsbuildinfo
-

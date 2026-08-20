@@ -24,11 +24,7 @@ Optimized by [Enfyra Team](https://enfyra.io).
 ## Installation
 
 ```bash
-npm install @enfyra/nuxt-seo
-# or
 yarn add @enfyra/nuxt-seo
-# or
-pnpm add @enfyra/nuxt-seo
 ```
 
 ## Configuration
@@ -143,9 +139,7 @@ The module provides complete TypeScript definitions for:
 - `ModuleOptions` - Module configuration options
 - `OgImageConfig` - OG image generation configuration
 - `WebManifestConfig` - Web manifest (PWA) configuration
-- `PageSEOConfig` - Extended config for per-page SEO
 - `RobotsConfig` - Robots.txt configuration
-- `SocialConfig` - Social media configuration
 
 All types are automatically available in your IDE with full IntelliSense support.
 
@@ -268,9 +262,10 @@ interface ModuleOptions {
   defaultLocale?: string // Default locale (e.g., 'en', 'en_US')
   defaultImage?: string // Default OG image path
   defaultType?: 'website' | 'article' | 'product' | 'profile' // Default OG type
-  pages?: Record<string, PageSEOConfig> // Per-page configuration
+  pages?: Record<string, PageSEOConfig> // Per-page configuration shape
   robots?: RobotsConfig // Robots.txt configuration
-  social?: SocialConfig // Social media configuration
+  social?: SocialConfig // Social media configuration shape
+  ogImage?: OgImageConfig // Dynamic OG image generation configuration
   webmanifest?: WebManifestConfig // Web manifest (PWA) configuration
 }
 ```
@@ -300,13 +295,56 @@ interface SEOConfig {
 
 ### PageSEOConfig
 
-Extends `SEOConfig` with:
+Documentation shape for `pages` entries. It extends `SEOConfig` with:
 
 ```typescript
 interface PageSEOConfig extends SEOConfig {
   changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never'
   priority?: number // 0.0 to 1.0
   lastmod?: string // ISO date string
+}
+```
+
+### SocialConfig
+
+Documentation shape for `social` configuration:
+
+```typescript
+interface SocialConfig {
+  twitter?: {
+    site?: string
+    creator?: string
+  }
+  facebook?: {
+    appId?: string
+  }
+}
+```
+
+### OgImageConfig
+
+```typescript
+interface OgImageConfig {
+  enabled?: boolean
+  route?: string // Public route for generated images (default: /_enfyra/nuxt-seo/og)
+  viewport?: {
+    width?: number
+    height?: number
+  }
+  quality?: number
+  format?: 'png' | 'jpeg' | 'webp'
+  cache?: {
+    ttl?: number
+    memoryTtl?: number
+  }
+  warmup?: {
+    enabled?: boolean
+    origin?: string
+    paths?: string[]
+    delay?: number
+    concurrency?: number
+    includeFacebook?: boolean
+  }
 }
 ```
 
@@ -406,6 +444,31 @@ const breadcrumbItems = [
 </template>
 ```
 
+## Production setup: canonical URLs, locales, and crawler routes
+
+For a production site, configure every public route in `seo.pages` so the generated sitemap has an explicit crawl policy. `siteUrl` must be the public origin with no trailing slash. Do not point it at an internal API or admin host.
+
+For localized Nuxt i18n routes, derive the canonical URL from the active locale and pass it to `usePageSEO`. Add the other locale codes with `alternateLocales`; this produces `og:locale` and `og:locale:alternate` metadata. Keep the sitemap entries aligned with those public URLs.
+
+```ts
+const { locale, t } = useI18n()
+const canonicalPath = computed(() => locale.value === 'vi' ? '/vi' : '/')
+const canonicalUrl = computed(() => `https://example.com${canonicalPath.value}`)
+
+usePageSEO(() => ({
+  title: t('seo.title'),
+  description: t('seo.description'),
+  url: canonicalUrl.value,
+  canonical: canonicalUrl.value,
+  locale: locale.value === 'vi' ? 'vi_VN' : 'en_US',
+  alternateLocales: locale.value === 'vi' ? ['en_US'] : ['vi_VN'],
+}))
+```
+
+Keep non-public routes such as maintenance or preview pages out of `seo.pages`, add them to `robots.disallow`, and set `noindex: true` and `nofollow: true` in that route's `usePageSEO` call. A robots rule alone is not a noindex directive for a page that has already been crawled.
+
+The module owns `/site.webmanifest`; do not also ship `public/site.webmanifest` or add a second manual manifest link. Configure the manifest entirely through `seo.webmanifest` so browsers receive the application name, colors, display mode, and existing icon files from one source of truth.
+
 ## OG Image Generation
 
 The module can automatically generate OG images by taking screenshots of your pages. This feature is disabled by default and can be enabled in your configuration.
@@ -419,6 +482,7 @@ export default defineNuxtConfig({
   seo: {
     ogImage: {
       enabled: true,
+      route: '/_enfyra/nuxt-seo/og',
       viewport: {
         width: 1440,
         height: 754,
@@ -436,20 +500,109 @@ export default defineNuxtConfig({
 
 ### Usage
 
-Once enabled, the module automatically creates an API endpoint at `/api/og` that generates OG images. You can use it in your pages:
+Once enabled, the module automatically creates an endpoint at `ogImage.route` (default `/_enfyra/nuxt-seo/og`). The namespaced default stays separate from `/api/**` proxies and other modules. Pass the page path with the `path` query parameter and use that URL as the page image:
 
 ```vue
 <script setup lang="ts">
 const config = useRuntimeConfig()
-const seoConfig = config.public.seo as any
+const seoConfig = config.public.seo
 const siteUrl = seoConfig?.siteUrl || 'https://example.com'
+const ogRoute = seoConfig?.ogImage?.route || '/_enfyra/nuxt-seo/og'
+const route = useRoute()
 
 usePageSEO({
   title: 'My Page Title',
   description: 'My page description',
-  image: `${siteUrl}/api/og?path=${encodeURIComponent('/my-page')}`,
+  image: `${siteUrl}${ogRoute}?path=${encodeURIComponent(route.path)}`,
 })
 </script>
+```
+
+For a static route, pass the route path directly:
+
+```vue
+<script setup lang="ts">
+usePageSEO({
+  title: 'Pricing',
+  description: 'Plans and pricing',
+  image: '/_enfyra/nuxt-seo/og?path=%2Fpricing',
+})
+</script>
+```
+
+For dynamic content, keep the path stable and put the dynamic title/description in the rendered page. The image generator screenshots the page itself, so the OG image reflects what the page displays at that route:
+
+```vue
+<script setup lang="ts">
+const route = useRoute()
+const article = await fetchArticle(route.params.slug)
+
+usePageSEO(() => ({
+  title: article.title,
+  description: article.excerpt,
+  type: 'article',
+  image: `/_enfyra/nuxt-seo/og?path=${encodeURIComponent(route.path)}`,
+}))
+</script>
+```
+
+You can preview an image directly in the browser:
+
+```text
+http://localhost:3000/_enfyra/nuxt-seo/og?path=%2Fmy-page
+```
+
+Add the `og-hide` class to elements that should be hidden only from generated OG screenshots:
+
+```vue
+<template>
+  <CookieBanner class="og-hide" />
+</template>
+```
+
+### Social image URLs and fallback behavior
+
+Use an absolute public URL for the `image` field when a page is shared outside the site. For generated images, build that URL from `siteUrl` and the route path. Do not use a relative OG route as the final Open Graph value: crawlers that do not preserve the original origin can resolve it incorrectly.
+
+```ts
+const siteUrl = 'https://example.com'
+const route = useRoute()
+
+usePageSEO({
+  title: 'Pricing',
+  description: 'Compare plans and pricing.',
+  image: `${siteUrl}/_enfyra/nuxt-seo/og?path=${encodeURIComponent(route.path)}`,
+})
+```
+
+`defaultImage` is a fallback only. It is used when a screenshot cannot be generated, so it should be a public static image with a stable absolute or site-relative URL. Prefer a 1200×630 image; social crawlers can display a different aspect ratio, but their card crop will be more reliable at that size.
+
+```ts
+seo: {
+  siteUrl: 'https://example.com',
+  defaultImage: '/og-fallback.png',
+}
+```
+
+### Startup cache warm-up
+
+OG capture is intentionally lazy by default: the first `/_enfyra/nuxt-seo/og` request may take several seconds while Chromium renders the page. Enable `warmup` to generate selected public pages in the background after Nitro begins listening. This does not delay application readiness. If a warm-up request fails, the module logs a warning; later OG requests still retry generation and can redirect to `defaultImage` if capture fails.
+
+When `paths` is omitted, the module warms every route in `seo.pages`. Set `includeFacebook` when you also want to pre-generate the separate 1200×630 JPEG cache used for Facebook crawlers. Keep `concurrency` low because each task launches a browser process.
+
+```ts
+seo: {
+  ogImage: {
+    enabled: true,
+    warmup: {
+      enabled: true,
+      paths: ['/', '/pricing'],
+      delay: 1000,
+      concurrency: 1,
+      includeFacebook: true,
+    },
+  },
+}
 ```
 
 ### How It Works
@@ -460,6 +613,7 @@ usePageSEO({
    - **Memory cache**: Fast access for frequently requested images (1 hour default)
    - **File cache**: Persistent cache stored in `.enfyra-og-cache/` directory (24 hours default)
 4. **Automatic URL Detection**: Automatically detects the correct URL based on request headers (supports staging/production)
+5. **Crawler Handling**: Facebook crawlers automatically receive a 1200x630 JPEG image and trigger background cache warmup for the crawled page
 
 ### Requirements
 
@@ -473,6 +627,23 @@ usePageSEO({
 ### Cache Management
 
 Cache files are stored in `.enfyra-og-cache/` directory. You can safely delete this folder to clear the cache. The cache key is based on the page path and host, so different environments (staging/production) have separate caches.
+
+### Fallback Image
+
+Set `defaultImage` to provide a fallback when screenshot generation fails. Absolute URLs are redirected as-is, and relative paths are resolved against the current request host:
+
+```typescript
+export default defineNuxtConfig({
+  modules: ['@enfyra/nuxt-seo'],
+  seo: {
+    siteUrl: 'https://example.com',
+    defaultImage: '/og-fallback.png',
+    ogImage: {
+      enabled: true,
+    },
+  },
+})
+```
 
 ### Performance
 
@@ -622,9 +793,9 @@ import type {
   ModuleOptions,       // Module configuration
   OgImageConfig,       // OG image generation config
   WebManifestConfig,   // Web manifest (PWA) config
-  PageSEOConfig,       // Extended page SEO config
   RobotsConfig,        // Robots.txt config
-  SocialConfig         // Social media config
+  SitemapRoute,        // Sitemap route entry
+  SitemapHandler       // Custom sitemap handler
 } from '@enfyra/nuxt-seo'
 ```
 
@@ -676,7 +847,7 @@ usePageSEO(() => ({
 If you encounter TypeScript errors:
 
 1. **Restart TypeScript Server**: In VS Code, press `Cmd/Ctrl + Shift + P` → "TypeScript: Restart TS Server"
-2. **Run Nuxt Prepare**: `yarn nuxt prepare` or `npm run prepare`
+2. **Run Nuxt Prepare**: `yarn nuxt prepare`
 3. **Check Module Installation**: Ensure `@enfyra/nuxt-seo` is in `node_modules`
 4. **Verify Auto-imports**: Check that composables are available without imports (they should be!)
 
@@ -803,7 +974,7 @@ export default defineNuxtConfig({
 ### Types or Auto-imports not working?
 
 1. **Restart TypeScript Server**: In VS Code, press `Cmd/Ctrl + Shift + P` → "TypeScript: Restart TS Server"
-2. **Run Nuxt Prepare**: `yarn nuxt prepare` or `npm run prepare` to regenerate types
+2. **Run Nuxt Prepare**: `yarn nuxt prepare` to regenerate types
 3. **Check Module Installation**: Ensure `@enfyra/nuxt-seo` is properly installed in `node_modules`
 4. **Verify Auto-imports**: Composables should be available without imports - if not, check your Nuxt version (requires Nuxt 4+)
 5. **Clear Cache**: Delete `.nuxt` folder and run `yarn nuxt prepare` again
@@ -813,6 +984,14 @@ export default defineNuxtConfig({
 1. Check `robots.enabled` is `true`
 2. Verify the route `/robots.txt` is accessible
 3. Check server logs for errors
+
+### OG image not generating?
+
+1. Check `seo.ogImage.enabled` is `true`
+2. Verify `/_enfyra/nuxt-seo/og?path=%2Fyour-page` is accessible
+3. In development, install Chrome/Chromium or set `CHROME_PATH`
+4. Make sure the target page path renders successfully before the screenshot request
+5. Delete `.enfyra-og-cache/` if you need to force regeneration
 
 ## License
 

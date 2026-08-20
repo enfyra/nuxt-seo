@@ -1,14 +1,14 @@
 import puppeteer from 'puppeteer-core'
 import chromium from '@sparticuz/chromium'
-import { access, mkdir, readFile, writeFile } from 'fs/promises'
-import { join } from 'path'
-import { createHash } from 'crypto'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import sharp from 'sharp'
 import { defineEventHandler, getQuery, getHeaders, setHeader, createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
 
 const cacheDir = join(process.cwd(), '.enfyra-og-cache')
-const cacheMap = new Map()
+const cacheMap = new Map<string, { buffer: Buffer; timestamp: number }>()
 
 async function ensureCacheDir() {
   try {
@@ -18,12 +18,12 @@ async function ensureCacheDir() {
   }
 }
 
-function getCacheKey(path, host) {
+function getCacheKey(path: string, host: string) {
   const key = host ? `${host}${path}` : path
   return createHash('md5').update(key).digest('hex')
 }
 
-async function getCachedImage(cacheKey, cacheTtl, memoryTtl) {
+async function getCachedImage(cacheKey: string, cacheTtl: number, memoryTtl: number) {
   const memoryCache = cacheMap.get(cacheKey)
   if (memoryCache && Date.now() - memoryCache.timestamp < memoryTtl) {
     return memoryCache.buffer
@@ -34,7 +34,7 @@ async function getCachedImage(cacheKey, cacheTtl, memoryTtl) {
     for (const fmt of formats) {
       const cacheFile = join(cacheDir, `${cacheKey}.${fmt}`)
       try {
-        const stats = await import('fs/promises').then(m => m.stat(cacheFile))
+        const stats = await import('node:fs/promises').then(m => m.stat(cacheFile))
         const fileAge = Date.now() - stats.mtimeMs
         
         if (fileAge < cacheTtl) {
@@ -52,7 +52,7 @@ async function getCachedImage(cacheKey, cacheTtl, memoryTtl) {
   return null
 }
 
-async function saveCachedImage(cacheKey, buffer, format = 'webp') {
+async function saveCachedImage(cacheKey: string, buffer: Buffer, format: 'webp' | 'jpeg' | 'png' = 'webp') {
   try {
     await ensureCacheDir()
     const cacheFile = join(cacheDir, `${cacheKey}.${format}`)
@@ -103,8 +103,8 @@ export default defineEventHandler(async (event) => {
 
   const defaultViewport = ogImageConfig.viewport || { width: 1440, height: 754 }
   const quality = ogImageConfig.quality || 85
-  const defaultFormat = ogImageConfig.format || 'webp'
-  const format = isFacebookCrawler ? 'jpeg' : defaultFormat
+  const defaultFormat: 'webp' | 'jpeg' | 'png' = ogImageConfig.format || 'webp'
+  const format: 'webp' | 'jpeg' | 'png' = isFacebookCrawler ? 'jpeg' : defaultFormat
   
   const viewport = isFacebookCrawler 
     ? { width: 1200, height: 630 }
@@ -122,6 +122,7 @@ export default defineEventHandler(async (event) => {
     } else {
       const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png'
       setHeader(event, 'Content-Type', mimeType)
+      setHeader(event, 'Content-Length', cached.length)
       const cacheMaxAge = isFacebookCrawler ? 604800 : 86400
       setHeader(event, 'Cache-Control', `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}, immutable`)
       setHeader(event, 'X-Content-Type-Options', 'nosniff')
@@ -293,6 +294,7 @@ export default defineEventHandler(async (event) => {
 
     const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png'
     setHeader(event, 'Content-Type', mimeType)
+    setHeader(event, 'Content-Length', imageBuffer.length)
     const cacheMaxAge = isFacebookCrawler ? 604800 : 86400
     setHeader(event, 'Cache-Control', `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}, immutable`)
     setHeader(event, 'X-Content-Type-Options', 'nosniff')

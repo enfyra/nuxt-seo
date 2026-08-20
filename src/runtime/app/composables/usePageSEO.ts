@@ -1,6 +1,6 @@
 import { useRuntimeConfig, useRoute, computed } from '#imports'
 import { useSEO } from './useSEO'
-import type { SEOConfig } from '../types'
+import type { SEOConfig } from '../../../types'
 
 export const usePageSEO = (pageConfig: Partial<SEOConfig> | (() => Partial<SEOConfig>) = {}) => {
   const runtimeConfig = useRuntimeConfig()
@@ -38,4 +38,3 @@ export const usePageSEO = (pageConfig: Partial<SEOConfig> | (() => Partial<SEOCo
     structuredData: result.structuredData,
   }
 }
-

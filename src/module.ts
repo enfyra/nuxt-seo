@@ -1,7 +1,6 @@
-import { defineNuxtModule, addImportsDir, addServerHandler, createResolver } from '@nuxt/kit'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
-import type { SEOConfig, OgImageConfig, WebManifestConfig } from './types'
+import { addComponentsDir, addImportsDir, addServerHandler, addServerPlugin, createResolver, defineNuxtModule } from '@nuxt/kit'
+import { defu } from 'defu'
+import type { SEOConfig, OgImageConfig, WebManifestConfig, RobotsConfig } from './types'
 
 export interface ModuleOptions extends Partial<SEOConfig> {
   enabled?: boolean
@@ -10,13 +9,8 @@ export interface ModuleOptions extends Partial<SEOConfig> {
   defaultLocale?: string
   defaultImage?: string
   defaultType?: 'website' | 'article' | 'product' | 'profile'
-  pages?: Record<string, Partial<SEOConfig & { changefreq?: string; priority?: number; lastmod?: string }>>
-  robots?: {
-    enabled?: boolean
-    disallow?: string[]
-    sitemap?: boolean
-    sitemapPath?: string
-  }
+  pages?: Record<string, Partial<SEOConfig & { changefreq?: string; priority?: number; lastmod?: string }>>,
+  robots?: RobotsConfig
   social?: {
     twitter?: {
       site?: string
@@ -33,7 +27,7 @@ export interface ModuleOptions extends Partial<SEOConfig> {
 export default defineNuxtModule<ModuleOptions>({
   meta: {
     name: '@enfyra/nuxt-seo',
-    version: '0.1.14',
+    version: '0.1.26',
     configKey: 'seo',
     compatibility: {
       nuxt: '^4.0.0',
@@ -66,25 +60,17 @@ export default defineNuxtModule<ModuleOptions>({
       },
     },
   },
-  setup(options: ModuleOptions, nuxt: any) {
-    // When built, import.meta.url points to dist/module.mjs
-    // We need to resolve from package root, so go up one level from dist
-    const currentFile = fileURLToPath(import.meta.url)
-    const currentDir = dirname(currentFile)
-    // If we're in dist/, go up to package root
-    const packageRoot = currentDir.endsWith('/dist') || currentDir.endsWith('\\dist')
-      ? dirname(currentDir)
-      : currentDir
-    const { resolve } = createResolver(packageRoot)
-    
-    nuxt.options.runtimeConfig.public = nuxt.options.runtimeConfig.public || {}
-    ;(nuxt.options.runtimeConfig.public as any).seo = {
+  setup(options, nuxt) {
+    const resolver = createResolver(import.meta.url)
+
+    nuxt.options.runtimeConfig.public.seo = defu(nuxt.options.runtimeConfig.public.seo as Record<string, unknown> | undefined, {
       enabled: options.enabled ?? true,
       siteUrl: options.siteUrl || '',
       siteName: options.siteName || '',
       defaultLocale: options.defaultLocale || 'en',
       defaultImage: options.defaultImage || '',
       defaultType: options.defaultType || 'website',
+      description: options.description || '',
       pages: options.pages || {},
       social: options.social || {},
       robots: {
@@ -92,9 +78,11 @@ export default defineNuxtModule<ModuleOptions>({
         disallow: options.robots?.disallow || ['/api/', '/admin/'],
         sitemap: options.robots?.sitemap !== false,
         sitemapPath: options.robots?.sitemapPath || '/sitemap.xml',
+        sitemapHandler: options.robots?.sitemapHandler,
       },
       ogImage: {
         enabled: options.ogImage?.enabled ?? false,
+        route: options.ogImage?.route || '/_enfyra/nuxt-seo/og',
         viewport: {
           width: options.ogImage?.viewport?.width ?? 1440,
           height: options.ogImage?.viewport?.height ?? 754,
@@ -105,68 +93,57 @@ export default defineNuxtModule<ModuleOptions>({
           ttl: options.ogImage?.cache?.ttl ?? 24 * 60 * 60 * 1000,
           memoryTtl: options.ogImage?.cache?.memoryTtl ?? 60 * 60 * 1000,
         },
+        warmup: {
+          enabled: options.ogImage?.warmup?.enabled ?? false,
+          origin: options.ogImage?.warmup?.origin || options.siteUrl || '',
+          paths: options.ogImage?.warmup?.paths ?? [],
+          delay: options.ogImage?.warmup?.delay ?? 1000,
+          concurrency: options.ogImage?.warmup?.concurrency ?? 1,
+          includeFacebook: options.ogImage?.warmup?.includeFacebook ?? false,
+        },
       },
       webmanifest: options.webmanifest || {},
-    }
-
-    // Resolve from package root to src/composables
-    addImportsDir(resolve('./src/composables'))
-    
-    nuxt.hook('prepare:types', ({ declarations, references }: any) => {
-      references.push({
-        path: resolve('./src/types/nuxt-imports.d.ts'),
-      })
-      
-      declarations.push(`
-declare global {
-  const usePageSEO: typeof import('@enfyra/nuxt-seo/src/composables/usePageSEO').usePageSEO
-  const useSEO: typeof import('@enfyra/nuxt-seo/src/composables/useSEO').useSEO
-}
-      `)
     })
 
-    nuxt.hook('components:dirs', (dirs: any[]) => {
-      dirs.push({
-        path: resolve('./src/components'),
-        pathPrefix: false,
-        global: false,
-      })
+    addImportsDir(resolver.resolve('./runtime/app/composables'))
+    addComponentsDir({
+      path: resolver.resolve('./runtime/app/components'),
+      pathPrefix: false,
     })
 
     if (options.robots?.enabled !== false) {
       addServerHandler({
         route: '/robots.txt',
-        handler: '@enfyra/nuxt-seo/src/server/routes/robots.ts',
+        handler: resolver.resolve('./runtime/server/routes/robots'),
       })
     }
 
     if (options.robots?.sitemap !== false) {
       addServerHandler({
         route: options.robots?.sitemapPath || '/sitemap.xml',
-        handler: '@enfyra/nuxt-seo/src/server/routes/sitemap.ts',
+        handler: resolver.resolve('./runtime/server/routes/sitemap'),
       })
     }
 
-    // Add webmanifest handler to prevent 404 errors
     addServerHandler({
       route: '/site.webmanifest',
-      handler: '@enfyra/nuxt-seo/src/server/routes/webmanifest.ts',
+      handler: resolver.resolve('./runtime/server/routes/webmanifest'),
     })
 
-    // Add OG image generation handler if enabled
     if (options.ogImage?.enabled) {
       addServerHandler({
-        route: '/api/og',
-        handler: '@enfyra/nuxt-seo/src/server/routes/og.ts',
+        route: options.ogImage?.route || '/_enfyra/nuxt-seo/og',
+        handler: resolver.resolve('./runtime/server/routes/og'),
       })
-      
-      // Add middleware to warm up OG image cache for Facebook crawlers
+
       addServerHandler({
         route: '/**',
-        handler: '@enfyra/nuxt-seo/src/server/middleware/og-warmup.ts',
+        handler: resolver.resolve('./runtime/server/middleware/og-warmup'),
         middleware: true,
       })
+      if (options.ogImage?.warmup?.enabled) {
+        addServerPlugin(resolver.resolve('./runtime/server/plugins/og-warmup'))
+      }
     }
   },
 })
-

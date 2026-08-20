@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { fileURLToPath } from 'node:url'
 import { setup, $fetch } from '@nuxt/test-utils/e2e'
 
-describe('@enfyra/nuxt-seo module', () => {
+describe('@enfyra/nuxt-seo module', async () => {
   await setup({
     rootDir: fileURLToPath(new URL('./fixtures/basic', import.meta.url)),
   })

@@ -1,33 +1,13 @@
 import { addComponentsDir, addImportsDir, addServerHandler, addServerPlugin, createResolver, defineNuxtModule } from '@nuxt/kit'
 import { defu } from 'defu'
-import type { SEOConfig, OgImageConfig, WebManifestConfig, RobotsConfig } from './types'
+import type { ModuleOptions } from './types'
 
-export interface ModuleOptions extends Partial<SEOConfig> {
-  enabled?: boolean
-  siteUrl?: string
-  siteName?: string
-  defaultLocale?: string
-  defaultImage?: string
-  defaultType?: 'website' | 'article' | 'product' | 'profile'
-  pages?: Record<string, Partial<SEOConfig & { changefreq?: string; priority?: number; lastmod?: string }>>,
-  robots?: RobotsConfig
-  social?: {
-    twitter?: {
-      site?: string
-      creator?: string
-    }
-    facebook?: {
-      appId?: string
-    }
-  }
-  ogImage?: OgImageConfig
-  webmanifest?: WebManifestConfig
-}
+export type { ModuleOptions } from './types'
 
 export default defineNuxtModule<ModuleOptions>({
   meta: {
     name: '@enfyra/nuxt-seo',
-    version: '0.1.26',
+    version: '0.1.28',
     configKey: 'seo',
     compatibility: {
       nuxt: '^4.0.0',
@@ -94,7 +74,7 @@ export default defineNuxtModule<ModuleOptions>({
           memoryTtl: options.ogImage?.cache?.memoryTtl ?? 60 * 60 * 1000,
         },
         warmup: {
-          enabled: options.ogImage?.warmup?.enabled ?? false,
+          enabled: options.ogImage?.warmup?.enabled ?? true,
           origin: options.ogImage?.warmup?.origin || options.siteUrl || '',
           paths: options.ogImage?.warmup?.paths ?? [],
           delay: options.ogImage?.warmup?.delay ?? 1000,
@@ -141,7 +121,7 @@ export default defineNuxtModule<ModuleOptions>({
         handler: resolver.resolve('./runtime/server/middleware/og-warmup'),
         middleware: true,
       })
-      if (options.ogImage?.warmup?.enabled) {
+      if (options.ogImage?.warmup?.enabled !== false) {
         addServerPlugin(resolver.resolve('./runtime/server/plugins/og-warmup'))
       }
     }

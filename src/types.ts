@@ -1,3 +1,20 @@
+export interface ModuleOptions extends Partial<SEOConfig> {
+  enabled?: boolean
+  siteUrl?: string
+  siteName?: string
+  defaultLocale?: string
+  defaultImage?: string
+  defaultType?: 'website' | 'article' | 'product' | 'profile'
+  pages?: Record<string, Partial<SEOConfig & { changefreq?: string, priority?: number, lastmod?: string }>>
+  robots?: RobotsConfig
+  social?: {
+    twitter?: { site?: string, creator?: string }
+    facebook?: { appId?: string }
+  }
+  ogImage?: OgImageConfig
+  webmanifest?: WebManifestConfig
+}
+
 export interface SEOConfig {
   title?: string
   description?: string

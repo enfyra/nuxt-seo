@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "#imports": ["./node_modules/nitropack/dist/runtime/index.d.ts"]
+    }
+  },
+  "include": ["src/runtime/server/utils/**/*.ts", "src/runtime/server/types/**/*.ts", "src/runtime/server/routes/og.ts", "src/runtime/server/plugins/og-warmup.ts", "src/runtime/server/middleware/og-warmup.ts", "src/types.ts"],
+  "exclude": ["node_modules", "dist", "test"]
+}

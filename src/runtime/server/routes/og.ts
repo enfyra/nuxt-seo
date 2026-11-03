@@ -1,356 +1,45 @@
-import puppeteer from 'puppeteer-core'
-import chromium from '@sparticuz/chromium'
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import sharp from 'sharp'
 import { defineEventHandler, getQuery, getHeaders, setHeader, createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
-
-const cacheDir = join(process.cwd(), '.enfyra-og-cache')
-const cacheMap = new Map<string, { buffer: Buffer; timestamp: number }>()
-
-async function ensureCacheDir() {
-  try {
-    await access(cacheDir)
-  } catch {
-    await mkdir(cacheDir, { recursive: true })
-  }
-}
-
-function getCacheKey(path: string, host: string) {
-  const key = host ? `${host}${path}` : path
-  return createHash('md5').update(key).digest('hex')
-}
-
-async function getCachedImage(cacheKey: string, cacheTtl: number, memoryTtl: number) {
-  const memoryCache = cacheMap.get(cacheKey)
-  if (memoryCache && Date.now() - memoryCache.timestamp < memoryTtl) {
-    return memoryCache.buffer
-  }
-
-  try {
-    const formats = ['webp', 'jpeg', 'png']
-    for (const fmt of formats) {
-      const cacheFile = join(cacheDir, `${cacheKey}.${fmt}`)
-      try {
-        const stats = await import('node:fs/promises').then(m => m.stat(cacheFile))
-        const fileAge = Date.now() - stats.mtimeMs
-        
-        if (fileAge < cacheTtl) {
-          const buffer = await readFile(cacheFile)
-          cacheMap.set(cacheKey, { buffer, timestamp: Date.now() })
-          return buffer
-        }
-      } catch {
-        continue
-      }
-    }
-  } catch {
-  }
-  
-  return null
-}
-
-async function saveCachedImage(cacheKey: string, buffer: Buffer, format: 'webp' | 'jpeg' | 'png' = 'webp') {
-  try {
-    await ensureCacheDir()
-    const cacheFile = join(cacheDir, `${cacheKey}.${format}`)
-    await writeFile(cacheFile, buffer)
-    cacheMap.set(cacheKey, { buffer, timestamp: Date.now() })
-  } catch (e) {
-    console.error('Failed to save cache:', e)
-  }
-}
+import type { OgImageConfig } from '../../../types'
+import { getOgImage } from '../utils/og-runtime'
 
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig()
-  const seoConfig = config.public?.seo || {}
-  const ogImageConfig = seoConfig.ogImage || {}
-  
-  if (!ogImageConfig.enabled) {
-    throw createError({
-      statusCode: 404,
-      message: 'OG Image generation is not enabled',
-    })
-  }
-
+  const seo = useRuntimeConfig().public?.seo || {}
+  const config: OgImageConfig = seo.ogImage || {}
+  if (!config.enabled) throw createError({ statusCode: 404, message: 'OG Image generation is not enabled' })
   const query = getQuery(event)
-  const path = (typeof query.path === 'string' ? query.path : '/') || '/'
-  
+  const path = typeof query.path === 'string' && query.path ? query.path : '/'
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || path.split('?')[0] === (config.route || '/_enfyra/nuxt-seo/og')) {
+    throw createError({ statusCode: 400, message: 'Invalid OG page path' })
+  }
   const headers = getHeaders(event)
   const host = headers.host || headers['x-forwarded-host'] || ''
-  const protocol = headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https')
-  
-  const userAgent = headers['user-agent'] || ''
-  const isFacebookCrawler = userAgent.includes('facebookexternalhit') || 
-                            userAgent.includes('Facebot') ||
-                            userAgent.includes('facebookcatalog')
-  
-  const isDev = process.env.NODE_ENV === 'development'
-  
-  let targetUrl
-  if (isDev) {
-    targetUrl = `http://localhost:3000${path}`
-  } else if (host) {
-    targetUrl = `${protocol}://${host}${path}`
-  } else {
-    const siteUrl = seoConfig.siteUrl || process.env.NUXT_PUBLIC_SITE_URL || ''
-    targetUrl = `${siteUrl}${path}`
-  }
-
-  const defaultImage = seoConfig.defaultImage || ''
-
-  const defaultViewport = ogImageConfig.viewport || { width: 1440, height: 754 }
-  const quality = ogImageConfig.quality || 85
-  const defaultFormat: 'webp' | 'jpeg' | 'png' = ogImageConfig.format || 'webp'
-  const format: 'webp' | 'jpeg' | 'png' = isFacebookCrawler ? 'jpeg' : defaultFormat
-  
-  const viewport = isFacebookCrawler 
-    ? { width: 1200, height: 630 }
-    : defaultViewport
-  
-  const cacheTtl = ogImageConfig.cache?.ttl || 24 * 60 * 60 * 1000
-  const memoryTtl = ogImageConfig.cache?.memoryTtl || 60 * 60 * 1000
-
-  const cacheKey = `${getCacheKey(path, host)}_${format}`
-  const cached = await getCachedImage(cacheKey, cacheTtl, memoryTtl)
-  
-  if (cached) {
-    if (!cached || cached.length === 0) {
-      console.warn('Cached image is empty, regenerating...')
-    } else {
-      const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png'
-      setHeader(event, 'Content-Type', mimeType)
-      setHeader(event, 'Content-Length', cached.length)
-      const cacheMaxAge = isFacebookCrawler ? 604800 : 86400
-      setHeader(event, 'Cache-Control', `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}, immutable`)
-      setHeader(event, 'X-Content-Type-Options', 'nosniff')
-      return cached
-    }
-  }
-
-  let browser = null
+  const protocol = headers['x-forwarded-proto'] === 'http' || host.includes('localhost') ? 'http' : 'https'
+  const origin = String(seo.siteUrl || `${protocol}://${host}`)
+  const ua = headers['user-agent'] || ''
+  const facebook = /facebookexternalhit|Facebot|facebookcatalog/.test(ua)
   try {
-    const isProduction = process.env.NODE_ENV === 'production'
-    
-    let browserOptions = {
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    }
-    
-    if (isProduction) {
-      browserOptions = Object.assign(browserOptions, {
-        args: chromium.args,
-        executablePath: await chromium.executablePath(),
-      })
-    } else {
-      const chromePaths = [
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        '/Applications/Chromium.app/Contents/MacOS/Chromium',
-      ]
-      
-      if (process.env.CHROME_PATH) {
-        chromePaths.push(process.env.CHROME_PATH)
-      }
-      
-      let foundPath = null
-      for (const chromePath of chromePaths) {
-        try {
-          await access(chromePath)
-          foundPath = chromePath
-          break
-        } catch {
-          continue
-        }
-      }
-      
-      if (foundPath) {
-        browserOptions = Object.assign(browserOptions, { executablePath: foundPath })
-      } else {
-        throw new Error('Chrome/Chromium executable not found. Please install Chrome or set CHROME_PATH environment variable.')
-      }
-    }
-    
-    browser = await puppeteer.launch(browserOptions)
-
-    const page = await browser.newPage()
-    
-    await page.setViewport({
-      width: viewport.width || 1200,
-      height: viewport.height || 630,
-      deviceScaleFactor: 1,
-    })
-
-    const waitTime = isFacebookCrawler ? 2000 : 1000
-    
-    try {
-      await page.goto(targetUrl, {
-        waitUntil: 'networkidle0',
-        timeout: isFacebookCrawler ? 45000 : 30000,
-      })
-    } catch (gotoError) {
-      console.warn('Page goto timeout or error, continuing anyway:', gotoError instanceof Error ? gotoError.message : 'Unknown')
-    }
-
-    await page.evaluate(() => {
-      // @ts-ignore - document is available in browser context
-      const style = document.createElement('style')
-      style.textContent = `
-        body {
-          margin: 0;
-          padding: 0;
-          overflow: hidden;
-        }
-        .og-hide {
-          display: none !important;
-        }
-      `
-      // @ts-ignore - document is available in browser context
-      document.head.appendChild(style)
-    })
-
-    await new Promise(resolve => setTimeout(resolve, waitTime))
-    
-    if (isFacebookCrawler) {
-      try {
-        await page.evaluate(() => {
-          return new Promise((resolve) => {
-            // @ts-ignore
-            if (document.readyState === 'complete') {
-              resolve(true)
-            } else {
-              // @ts-ignore
-              window.addEventListener('load', () => resolve(true), { once: true })
-              setTimeout(() => resolve(true), 1000)
-            }
-          })
-        })
-      } catch {
-      }
-    }
-
-    const screenshot = await page.screenshot({
-      type: 'png',
-      clip: {
-        x: 0,
-        y: 0,
-        width: viewport.width || 1200,
-        height: viewport.height || 630,
-      },
-    })
-
-    if (browser) {
-      await browser.close()
-      browser = null
-    }
-
-    let imageBuffer
-    
-    if (format === 'webp') {
-      imageBuffer = await sharp(screenshot)
-        .resize(viewport.width, viewport.height, {
-          fit: 'cover',
-          position: 'center'
-        })
-        .webp({ quality })
-        .toBuffer()
-    } else if (format === 'jpeg') {
-      imageBuffer = await sharp(screenshot)
-        .resize(viewport.width, viewport.height, {
-          fit: 'cover',
-          position: 'center'
-        })
-        .jpeg({ 
-          quality: isFacebookCrawler ? 92 : quality,
-          mozjpeg: true,
-          progressive: true
-        })
-        .toBuffer()
-    } else {
-      imageBuffer = await sharp(screenshot)
-        .resize(viewport.width, viewport.height, {
-          fit: 'cover',
-          position: 'center'
-        })
-        .png()
-        .toBuffer()
-    }
-
-    if (!imageBuffer || imageBuffer.length === 0) {
-      throw new Error('Generated image buffer is empty')
-    }
-
-    if (imageBuffer.length > 8 * 1024 * 1024) {
-      console.warn(`Image size ${imageBuffer.length} exceeds 8MB limit, compressing...`)
-      if (format === 'jpeg') {
-        imageBuffer = await sharp(imageBuffer)
-          .jpeg({ quality: 75, mozjpeg: true })
-          .toBuffer()
-      }
-    }
-
-    await saveCachedImage(cacheKey, Buffer.from(imageBuffer), format)
-
-    const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png'
-    setHeader(event, 'Content-Type', mimeType)
-    setHeader(event, 'Content-Length', imageBuffer.length)
-    const cacheMaxAge = isFacebookCrawler ? 604800 : 86400
-    setHeader(event, 'Cache-Control', `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}, immutable`)
+    const result = await getOgImage({ origin, path, facebook, config })
+    const format = facebook ? 'jpeg' : config.format || 'webp'
+    const ttlSeconds = Math.max(0, Math.floor((config.cache?.ttl ?? 86400000) / 1000))
+    const age = Math.max(0, Math.floor((Date.now() - result.generatedAt) / 1000))
+    const remaining = Math.max(0, ttlSeconds - age)
+    setHeader(event, 'Vary', 'User-Agent')
+    setHeader(event, 'Content-Type', `image/${format}`)
+    setHeader(event, 'Content-Length', result.buffer.length)
+    setHeader(event, 'Cache-Control', `public, max-age=${remaining}, s-maxage=${remaining}, stale-while-revalidate=${Math.max(1, ttlSeconds)}`)
     setHeader(event, 'X-Content-Type-Options', 'nosniff')
-    if (isFacebookCrawler) {
-      setHeader(event, 'X-Facebook-Debug', '1')
-    }
-    const etag = createHash('md5').update(imageBuffer).digest('hex')
-    setHeader(event, 'ETag', `"${etag}"`)
-
-    return imageBuffer
-  } catch (e) {
-    if (browser) {
-      try {
-        await browser.close()
-      } catch {
-      }
-    }
-    
-    const errorMessage = e instanceof Error ? e.message : 'Unknown error'
-    console.error('OG Image capture error:', errorMessage, {
-      path,
-      targetUrl,
-      isFacebookCrawler,
-      error: e instanceof Error ? e.stack : e
-    })
-    
-    if (defaultImage && defaultImage.startsWith('http')) {
-      setHeader(event, 'Location', defaultImage)
+    setHeader(event, 'ETag', `"${createHash('md5').update(result.buffer).digest('hex')}"`)
+    return result.buffer
+  }
+  catch {
+    const fallback = String(seo.defaultImage || '')
+    if (fallback) {
+      setHeader(event, 'Location', new URL(fallback, origin).href)
       setHeader(event, 'Cache-Control', 'public, max-age=3600')
-      throw createError({
-        statusCode: 302,
-        message: 'Redirecting to default image',
-      })
+      throw createError({ statusCode: 302, message: 'Redirecting to default image' })
     }
-    
-    if (defaultImage) {
-      try {
-        const defaultImagePath = defaultImage.startsWith('/') ? defaultImage : `/${defaultImage}`
-        const defaultImageUrl = `${protocol}://${host}${defaultImagePath}`
-        setHeader(event, 'Location', defaultImageUrl)
-        setHeader(event, 'Cache-Control', 'public, max-age=3600')
-        throw createError({
-          statusCode: 302,
-          message: 'Redirecting to default image',
-        })
-      } catch (redirectError) {
-        if (redirectError && typeof redirectError === 'object' && 'statusCode' in redirectError && redirectError.statusCode === 302) {
-          throw redirectError
-        }
-      }
-    }
-    
-    throw createError({
-      statusCode: 500,
-      message: `Failed to capture image: ${errorMessage}`,
-    })
+    throw createError({ statusCode: 503, message: 'OG image is temporarily unavailable' })
   }
 })
-

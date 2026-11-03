@@ -1,6 +1,6 @@
 {
   "name": "@enfyra/nuxt-seo",
-  "version": "0.1.26",
+  "version": "0.1.28",
   "packageManager": "yarn@4.17.0",
   "description": "A powerful, configurable SEO module for Nuxt 4 with automatic OG image generation",
   "type": "module",
@@ -66,6 +66,7 @@
     "prepack": "nuxt-module-build build",
     "dev": "nuxt dev playground",
     "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
+    "typecheck:runtime": "tsc --noEmit --pretty false --project tsconfig.runtime.json",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "lint": "eslint .",

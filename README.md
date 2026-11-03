@@ -586,9 +586,11 @@ seo: {
 
 ### Startup cache warm-up
 
-OG capture is intentionally lazy by default: the first `/_enfyra/nuxt-seo/og` request may take several seconds while Chromium renders the page. Enable `warmup` to generate selected public pages in the background after Nitro begins listening. This does not delay application readiness. If a warm-up request fails, the module logs a warning; later OG requests still retry generation and can redirect to `defaultImage` if capture fails.
+When OG generation is enabled, startup warmup checks the configured public pages in the background without delaying application readiness. Fresh images are reused; missing images are captured sequentially. Set `warmup.enabled: false` to opt out.
 
-When `paths` is omitted, the module warms every route in `seo.pages`. Set `includeFacebook` when you also want to pre-generate the separate 1200×630 JPEG cache used for Facebook crawlers. Keep `concurrency` low because each task launches a browser process.
+When `paths` is omitted, the module checks every route in `seo.pages`. Set `includeFacebook` to prepare the separate 1200×630 JPEG variant. Startup warmup, HTTP requests and background renewals share one serialized renderer per app. The `concurrency` compatibility option does not increase browser concurrency: only one Chromium can run at a time in an app cache directory.
+
+Images are fresh for 24 hours by default. After expiry, requests immediately receive the old image while one background job renews it. Requests for the same missing or stale image share a job. A failed renewal retains the old image and backs off before trying again; a page without any cached image waits for its queued capture or uses the configured fallback on failure.
 
 ```ts
 seo: {
@@ -611,9 +613,9 @@ seo: {
 2. **Image Optimization**: Converts to WebP/JPEG format with configurable quality
 3. **Caching**: Two-tier caching system:
    - **Memory cache**: Fast access for frequently requested images (1 hour default)
-   - **File cache**: Persistent cache stored in `.enfyra-og-cache/` directory (24 hours default)
-4. **Automatic URL Detection**: Automatically detects the correct URL based on request headers (supports staging/production)
-5. **Crawler Handling**: Facebook crawlers automatically receive a 1200x630 JPEG image and trigger background cache warmup for the crawled page
+   - **File cache**: Persistent images in `.enfyra-og-cache/`, fresh for 24 hours by default and served stale during background renewal
+4. **Capture origin**: Uses configured `siteUrl`, with request-origin fallback when it is absent
+5. **Crawler Handling**: Facebook crawlers receive a separate 1200×630 JPEG variant through the same cache and serialized renderer; asset/payload requests do not warm new screenshots
 
 ### Requirements
 
@@ -626,7 +628,9 @@ seo: {
 
 ### Cache Management
 
-Cache files are stored in `.enfyra-og-cache/` directory. You can safely delete this folder to clear the cache. The cache key is based on the page path and host, so different environments (staging/production) have separate caches.
+Cache files are stored in `.enfyra-og-cache/`. Cache identity includes the capture host, exact page path and image format. Keep the same app cache directory shared by its Node processes so `.render.lock` enforces one Chromium across those processes. Independent hosts/replicas with separate filesystems require a shared cache/locking boundary to obtain an application-wide guarantee.
+
+To clear images, stop the app and confirm its Chromium processes have exited before removing the cache directory. The renderer deliberately retains `.render.lock` if browser shutdown cannot be confirmed, or if the owning process dies before releasing it. Recover that lock only after verifying no Chromium for the app remains, then restart the app; do not delete an active lock to bypass serialization. Fresh cached images and stale images remain readable while capture is blocked.
 
 ### Fallback Image
 

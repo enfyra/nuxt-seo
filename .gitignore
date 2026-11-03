@@ -8,3 +8,4 @@ playground/.output
 playground/node_modules
 coverage
 *.tsbuildinfo
+AGENTS.md

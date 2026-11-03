@@ -7,7 +7,7 @@ export type { ModuleOptions } from './types'
 export default defineNuxtModule<ModuleOptions>({
   meta: {
     name: '@enfyra/nuxt-seo',
-    version: '0.1.30',
+    version: '0.1.31',
     configKey: 'seo',
     compatibility: {
       nuxt: '^4.0.0',

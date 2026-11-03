@@ -3,7 +3,7 @@ import { mkdtemp, rm, readdir, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-const state = vi.hoisted(() => ({ launches: 0, active: 0, maxActive: 0, image: 'first', fail: false, closeFail: false, gate: undefined as Promise<void> | undefined, closeGate: undefined as Promise<void> | undefined }))
+const state = vi.hoisted(() => ({ launches: 0, active: 0, maxActive: 0, image: 'first', fail: false, closeFail: false, gate: undefined as Promise<void> | undefined, closeGate: undefined as Promise<void> | undefined, order: [] as string[] }))
 vi.mock('puppeteer-core', () => ({ default: { launch: async () => {
   state.launches++
   state.active++
@@ -14,8 +14,9 @@ vi.mock('puppeteer-core', () => ({ default: { launch: async () => {
       setUserAgent: async () => {},
       goto: async () => { if (state.gate) await state.gate },
       addStyleTag: async () => {},
-      evaluate: async () => {},
+      evaluate: async () => { state.order.push('evaluate') },
       screenshot: async () => {
+        state.order.push('screenshot')
         if (state.fail) throw new Error('capture failed')
         return Buffer.from(state.image)
       },
@@ -56,7 +57,7 @@ beforeEach(async () => {
   vi.resetModules()
   directory = await mkdtemp(join(tmpdir(), 'nuxt-seo-runtime-'))
   cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory)
-  Object.assign(state, { launches: 0, active: 0, maxActive: 0, image: 'first', fail: false, closeFail: false, gate: undefined, closeGate: undefined })
+  Object.assign(state, { launches: 0, active: 0, maxActive: 0, image: 'first', fail: false, closeFail: false, gate: undefined, closeGate: undefined, order: [] })
   vi.stubEnv('NODE_ENV', 'production')
 })
 afterEach(async () => {
@@ -66,6 +67,13 @@ afterEach(async () => {
 })
 
 describe('OG serialized stale-while-revalidate runtime', () => {
+  it('waits for visual settling before capturing', async () => {
+    const og = await handler()
+    await og(event('/settle') as never)
+    expect(state.order.indexOf('evaluate')).toBeGreaterThanOrEqual(0)
+    expect(state.order.indexOf('evaluate')).toBeLessThan(state.order.indexOf('screenshot'))
+  })
+
   it('keeps a fresh cache across requests and handler contexts', async () => {
     const first = await handler()
     expect((await first(event() as never)).toString()).toBe('first')

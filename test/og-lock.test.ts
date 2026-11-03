@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
@@ -73,4 +73,35 @@ describe('OG app-wide filesystem lock', () => {
     })).rejects.toThrow('close failed')
     await expect(stat(join(directory, '.enfyra-og-cache/.render.lock'))).resolves.toBeDefined()
   })
+
+  it('reclaims a lock whose holder process is gone', async () => {
+    const exited = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' })
+    await new Promise(resolve => exited.once('exit', resolve))
+    await mkdir(join(directory, '.enfyra-og-cache'), { recursive: true })
+    await writeFile(join(directory, '.enfyra-og-cache/.render.lock'), JSON.stringify({ pid: exited.pid }))
+
+    const started = Date.now()
+    await expect(withOgRenderLock(async () => 'reclaimed')).resolves.toBe('reclaimed')
+    expect(Date.now() - started).toBeLessThan(1000)
+    await expect(stat(join(directory, '.enfyra-og-cache/.render.lock'))).rejects.toThrow()
+  })
+
+  it('waits for a lock held by a live process', async () => {
+    const source = fileURLToPath(new URL('../src/runtime/server/utils/og-lock.ts', import.meta.url))
+    const code = `import { pathToFileURL } from 'node:url'; const { withOgRenderLock } = await import(pathToFileURL(process.argv[1]).href); await withOgRenderLock(async () => { console.log('held'); await new Promise(r => setTimeout(r, 350)); });`
+    const holder = spawn(process.execPath, ['--input-type=module', '-e', code, source], { cwd: directory, stdio: ['ignore', 'pipe', 'pipe'] })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        holder.stdout.once('data', () => resolve())
+        holder.once('error', reject)
+        holder.once('exit', code => reject(new Error(`Holder exited early: ${code}`)))
+      })
+      const started = Date.now()
+      await expect(withOgRenderLock(async () => 'after holder')).resolves.toBe('after holder')
+      expect(Date.now() - started).toBeGreaterThanOrEqual(200)
+    }
+    finally {
+      if (holder.exitCode === null) holder.kill('SIGKILL')
+    }
+  }, 5000)
 })

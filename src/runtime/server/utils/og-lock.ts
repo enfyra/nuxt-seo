@@ -1,6 +1,45 @@
-import { mkdir, open, rm } from 'node:fs/promises'
+import { mkdir, open, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+
+function isProcessAlive(pid: number) {
+  try {
+    process.kill(pid, 0)
+    return true
+  }
+  catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH'
+  }
+}
+
+async function reclaimDeadLock(file: string) {
+  let snapshot: string
+  try {
+    snapshot = await readFile(file, 'utf8')
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true
+    throw error
+  }
+  let pid: unknown
+  try {
+    pid = JSON.parse(snapshot).pid
+  }
+  catch {
+    return false
+  }
+  if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0 || pid === process.pid) return false
+  if (isProcessAlive(pid)) return false
+  try {
+    if (await readFile(file, 'utf8') !== snapshot) return false
+    await rm(file, { force: true })
+    return true
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true
+    throw error
+  }
+}
 
 export async function withOgRenderLock<T>(run: () => Promise<T>): Promise<T> {
   const directory = join(process.cwd(), '.enfyra-og-cache')
@@ -14,6 +53,7 @@ export async function withOgRenderLock<T>(run: () => Promise<T>): Promise<T> {
     }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      if (await reclaimDeadLock(file)) continue
       if (Date.now() >= deadline) throw new Error('OG renderer is busy or requires lock recovery')
       await delay(100)
       continue

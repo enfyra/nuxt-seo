@@ -9,3 +9,4 @@ playground/node_modules
 coverage
 *.tsbuildinfo
 AGENTS.md
+.yarn/install-state.gz
